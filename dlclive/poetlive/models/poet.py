@@ -6,7 +6,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..util import box_ops
 from ..util.misc import (NestedTensor, nested_tensor_from_tensor_list,
                        accuracy, get_world_size, is_dist_avail_and_initialized)
 #from util.misc import interpolate

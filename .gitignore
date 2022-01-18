@@ -4,6 +4,9 @@
 benchmarking/Data*
 benchmarking/results*
 
+# POET checkpoints
+*.pth
+
 *test*
 **DS_Store*
 *vscode*
