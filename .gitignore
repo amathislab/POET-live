@@ -1,3 +1,13 @@
+# DeepLabCut-live
+
+# Data related to benchmark!
+benchmarking/Data*
+benchmarking/results*
+
+*test*
+**DS_Store*
+*vscode*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
