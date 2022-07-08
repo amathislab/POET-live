@@ -486,6 +486,9 @@ class DLCLive(object):
             pose = torch.cat((pose_output[:,:2].cpu(), torch.ones([len(pose_output),1]), pose_output[:, 2:].cpu()), dim=1)
             # chunck into keypoints
             pose = torch.reshape(pose, [len(pose), 18, 3])
+
+            # remove center from predictions
+            pose = pose[:,1:,:]
             
             self.pose = torch.cat([*pose], dim=0) # concatenate multiple instances
 
