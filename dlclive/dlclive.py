@@ -275,8 +275,8 @@ class DLCLive(object):
         # get model file
 
         if self.model_type.lower() == 'poet':
-            #model_file = glob.glob(os.path.normpath(self.path + "/*.pth"))[0]
-            model_file = "checkpoint.pth"
+            model_file = glob.glob(os.path.normpath(self.path + "/*.pth"))[0]
+            #model_file = "checkpoint.pth"
         else:
             model_file = glob.glob(os.path.normpath(self.path + "/*.pb"))[0]
         if not os.path.isfile(model_file):
