@@ -490,7 +490,10 @@ class DLCLive(object):
             # remove center from predictions
             pose = pose[:,1:,:]
             
-            self.pose = torch.cat([*pose], dim=0) # concatenate multiple instances
+            if len(pose) == 0:
+                self.pose = torch.zeros(17,3)
+            else:            
+                self.pose = torch.cat([*pose], dim=0) # concatenate multiple instances
 
 
         else:
