@@ -169,7 +169,7 @@ class DLCLive(object):
             )
 
         if self.model_type.lower() == 'poet':
-            print("Wohoo, you're about to run POETlive!")
+            print("\n Wohoo, you're about to run POETlive!\n")
 
         else:
             self.read_config()
