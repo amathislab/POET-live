@@ -1,10 +1,47 @@
 # POET-live
-SDK for running DLC and **POET** on a live video stream
+
+POET-live is a modification of DLC-live where the inference code of [POET](https://github.com/amathislab/poet) was integrated. The following steps provide instructions for installation and setup on Ubuntu.
+
+> **Note**: Everything that comes after these instructions stems from the original DeepLabCut-live project and may not work with POET-live.
+
+
+### 🛠 Installation
+
+To install POET-live and its dependencies, follow these steps:
+
+1. Clone the repositories:
+  ```bash
+  git clone git@github.com:amathislab/POET-live.git
+  git clone git@github.com:amathislab/POET-live-GUI.git
+  ```
+2. Create and activate a Python environment:
+  ```bash
+  conda create -n poet-live python=3.7
+  conda activate poet-live
+  conda install ipykernel
+  ```
+3. Install required packages:
+  ```bash
+  cd POET-live
+  pip install -r requirements.txt
+
+  cd POET-live-GUI
+  pip install -e .
+  pip install opencv-python==4.7.0.72
+
+  cd POET-live
+  pip install tensorflow==2.7.4
+  pip install -e .
+  pip install scipy 
+  ```
 
 Check out this [script](dlclive/poetlive/check_install.py) on how to use POET-live and if your installation is working!
 
+---
+---
 
-# DeepLabCut-live! SDK<img src="https://images.squarespace-cdn.com/content/v1/57f6d51c9f74566f55ecf271/1606082050387-M8M1CFI5DFUZCBAAUI0W/ke17ZwdGBToddI8pDm48kLuMKy7Ws6mFofiFehYynfdZw-zPPgdn4jUwVcJE1ZvWQUxwkmyExglNqGp0IvTJZUJFbgE-7XRK3dMEBRBhUpzp2tFVMcEgqZM8QO7VXXQogrsLnYKC4n4YnYuHC1HMRWygQlqMNAoTF9HaycikLeg/DLClive.png?format=750w" width="350" title="DLC-live" alt="DLC LIVE!" align="right" vspace = "50">
+
+## DeepLabCut-live! SDK<img src="https://images.squarespace-cdn.com/content/v1/57f6d51c9f74566f55ecf271/1606082050387-M8M1CFI5DFUZCBAAUI0W/ke17ZwdGBToddI8pDm48kLuMKy7Ws6mFofiFehYynfdZw-zPPgdn4jUwVcJE1ZvWQUxwkmyExglNqGp0IvTJZUJFbgE-7XRK3dMEBRBhUpzp2tFVMcEgqZM8QO7VXXQogrsLnYKC4n4YnYuHC1HMRWygQlqMNAoTF9HaycikLeg/DLClive.png?format=750w" width="350" title="DLC-live" alt="DLC LIVE!" align="right" vspace = "50">
 
 <a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
 ![PyPI - Python Version](https://img.shields.io/pypi/v/deeplabcut-live)
