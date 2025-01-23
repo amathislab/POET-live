@@ -11,9 +11,7 @@ import glob
 import warnings
 import numpy as np
 import tensorflow as tf
-import typing
-from pathlib import Path
-from typing import Optional, Tuple, List
+
 
 try:
     TFVER = [int(v) for v in tf.__version__.split(".")]
@@ -35,8 +33,24 @@ from dlclive.pose import extract_cnn_output, argmax_pose_predict, multi_pose_pre
 from dlclive.display import Display
 from dlclive import utils
 from dlclive.exceptions import DLCLiveError, DLCLiveWarning
-if typing.TYPE_CHECKING:
-    from dlclive.processor import Processor
+
+# POET imports
+import torch
+import torchvision.transforms as T
+torch.set_grad_enabled(False)
+DEVICE = torch.device('cuda')
+
+from dlclive.poetlive.models.backbone import Backbone, Joiner
+from dlclive.poetlive.models.poet import POET, PostProcess
+from dlclive.poetlive.models.position_encoding import PositionEmbeddingSine
+from dlclive.poetlive.models.transformer import Transformer
+
+transform = T.Compose([ T.Resize(800),
+                        T.ToTensor(),
+                        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) ])
+#transform = T.ToTensor()
+transPIL = T.ToPILImage()
+
 
 class DLCLive(object):
     """
@@ -103,23 +117,23 @@ class DLCLive(object):
 
     def __init__(
         self,
-        model_path:str,
-        model_type:str="base",
-        precision:str="FP32",
+        model_path,
+        model_type="base", # can be POET now
+        precision="FP32",
         tf_config=None,
-        cropping:Optional[List[int]]=None,
-        dynamic:Tuple[bool, float, float]=(False, 0.5, 10),
-        resize:Optional[float]=None,
-        convert2rgb:bool=True,
-        processor:Optional['Processor']=None,
-        display:typing.Union[bool, Display]=False,
-        pcutoff:float=0.5,
-        display_radius:int=3,
-        display_cmap:str="bmy",
+        cropping=None,
+        dynamic=(False, 0.5, 10),
+        resize=None,
+        convert2rgb=True,
+        processor=None,
+        display=False,
+        pcutoff=0.5,
+        display_radius=3,
+        display_cmap="bmy",
     ):
 
         self.path = model_path
-        self.cfg = None # type: typing.Optional[dict]
+        self.cfg = None
         self.model_type = model_type
         self.tf_config = tf_config
         self.precision = precision
@@ -129,12 +143,11 @@ class DLCLive(object):
         self.resize = resize
         self.processor = processor
         self.convert2rgb = convert2rgb
-        if isinstance(display, Display):
-            self.display = display
-        elif display:
-            self.display = Display(pcutoff=pcutoff, radius=display_radius, cmap=display_cmap)
-        else:
-            self.display = None
+        self.display = (
+            Display(pcutoff=pcutoff, radius=display_radius, cmap=display_cmap)
+            if display
+            else None
+        )
 
         self.sess = None
         self.inputs = None
@@ -143,16 +156,23 @@ class DLCLive(object):
         self.pose = None
         self.is_initialized = False
 
+        # for POET (use pcutoff as threshold)
+        self.threshold = pcutoff
+
         # checks
 
         if self.model_type == "tflite" and self.dynamic[0]:
-            self.dynamic = (False, *self.dynamic[1:])
+            self.dynamic[0] = False
             warnings.warn(
                 "Dynamic cropping is not supported for tensorflow lite inference. Dynamic cropping will not be used...",
                 DLCLiveWarning,
             )
 
-        self.read_config()
+        if self.model_type.lower() == 'poet':
+            print("\n Wohoo, you're about to run POETlive!\n")
+
+        else:
+            self.read_config()
 
     def read_config(self):
         """ Reads configuration yaml file
@@ -163,14 +183,14 @@ class DLCLive(object):
             error thrown if pose configuration file does nott exist
         """
 
-        cfg_path = Path(self.path).resolve() / "pose_cfg.yaml"
-        if not cfg_path.exists():
+        cfg_path = os.path.normpath(self.path + "/pose_cfg.yaml")
+        if not os.path.isfile(cfg_path):
             raise FileNotFoundError(
-                f"The pose configuration file for the exported model at {str(cfg_path)} was not found. Please check the path to the exported model directory"
+                f"The pose configuration file for the exported model at {cfg_path} was not found. Please check the path to the exported model directory"
             )
 
         ruamel_file = ruamel.yaml.YAML()
-        self.cfg = ruamel_file.load(open(str(cfg_path), "r"))
+        self.cfg = ruamel_file.load(open(cfg_path, "r"))
 
     @property
     def parameterization(self) -> dict:
@@ -254,7 +274,11 @@ class DLCLive(object):
 
         # get model file
 
-        model_file = glob.glob(os.path.normpath(self.path + "/*.pb"))[0]
+        if self.model_type.lower() == 'poet':
+            model_file = glob.glob(os.path.normpath(self.path + "/*.pth"))[0]
+            #model_file = "checkpoint.pth"
+        else:
+            model_file = glob.glob(os.path.normpath(self.path + "/*.pb"))[0]
         if not os.path.isfile(model_file):
             raise FileNotFoundError(
                 "The model file {} does not exist.".format(model_file)
@@ -294,24 +318,12 @@ class DLCLive(object):
             graph = finalize_graph(graph_def)
             output_nodes = get_output_nodes(graph)
             output_nodes = [on.replace("DLC/", "") for on in output_nodes]
-            
-            tf_version_2 = tf.__version__[0] == '2'
-
-            if tf_version_2:
-                converter = tf.compat.v1.lite.TFLiteConverter.from_frozen_graph(
-                    model_file,
-                    ["Placeholder"],
-                    output_nodes,
-                    input_shapes={"Placeholder": [1, processed_frame.shape[0], processed_frame.shape[1], 3]},
-                )
-            else:
-                converter = tf.lite.TFLiteConverter.from_frozen_graph(
-                    model_file,
-                    ["Placeholder"],
-                    output_nodes,
-                    input_shapes={"Placeholder": [1, processed_frame.shape[0], processed_frame.shape[1], 3]},
-                )
-                
+            converter = tf.lite.TFLiteConverter.from_frozen_graph(
+                model_file,
+                ["Placeholder"],
+                output_nodes,
+                input_shapes={"Placeholder": [1, processed_frame.shape[0], processed_frame.shape[1], 3]},
+            )
             try:
                 tflite_model = converter.convert()
             except Exception:
@@ -357,10 +369,28 @@ class DLCLive(object):
                 graph, tf_config=self.tf_config
             )
 
+        
+        elif self.model_type.lower() == "poet":
+
+            hidden_dim = 256
+            backbone = Backbone("resnet50", train_backbone=False, return_interm_layers=False,
+                                dilation5=False, dilation4=False)
+            pos_enc = PositionEmbeddingSine(hidden_dim // 2, normalize=True)
+            backbone_with_pos_enc = Joiner(backbone, pos_enc)
+            backbone_with_pos_enc.num_channels = backbone.num_channels
+            transformer = Transformer(d_model=hidden_dim, return_intermediate_dec=True)
+            poet = POET(backbone_with_pos_enc, transformer, num_classes=2, num_queries=25, aux_loss=True)
+            checkpoint = torch.load(model_file, map_location="cpu")
+            poet.load_state_dict(checkpoint["model"])
+            poet.eval();
+            poet.train(False)
+            self.poet_model = poet.to(DEVICE)
+
+
         else:
 
             raise DLCLiveError(
-                "model_type = {} is not supported. model_type must be 'base', 'tflite', or 'tensorrt'".format(
+                "model_type = {} is not supported. model_type must be 'base', 'tflite', 'tensorrt', or POET".format(
                     self.model_type
                 )
             )
@@ -420,6 +450,26 @@ class DLCLive(object):
                     self.outputs[0]["index"]
                 )
 
+        elif self.model_type.lower() == "poet":
+
+            # im = cv2.imread('sample_image.png') 
+            #im = transPIL(im)
+            im = transPIL(frame)
+            img = transform(im).unsqueeze(0)
+
+            # propagate through the model
+            with torch.no_grad():
+                #outputs = self.poet_model(frame)
+                outputs = self.poet_model(img.to(DEVICE))
+
+            probas = outputs['pred_logits'].softmax(-1)[0, :, 1]
+
+            keep = probas >= self.threshold
+
+            #pose_output = utils.rescale_kpts(outputs['pred_kpts'][0, keep], frame.size)
+            pose_output = utils.rescale_kpts(outputs['pred_kpts'][0, keep], im.size)
+
+
         else:
 
             raise DLCLiveError(
@@ -428,25 +478,46 @@ class DLCLive(object):
                 )
             )
 
-        # check if using TFGPUinference flag
-        # if not, get pose from network output
+    
+        if self.model_type.lower() == "poet":
+            #self.pose = pose_output
 
-        if len(pose_output) > 1:
-            scmap, locref = extract_cnn_output(pose_output, self.cfg)
-            num_outputs = self.cfg.get("num_outputs", 1)
-            if num_outputs > 1:
-                self.pose = multi_pose_predict(
-                    scmap, locref, self.cfg["stride"], num_outputs
-                )
-            else:
-                self.pose = argmax_pose_predict(scmap, locref, self.cfg["stride"])
+            # add visibility to center prediction
+            pose = torch.cat((pose_output[:,:2].cpu(), torch.ones([len(pose_output),1]), pose_output[:, 2:].cpu()), dim=1)
+            # chunck into keypoints
+            pose = torch.reshape(pose, [len(pose), 18, 3])
+
+            # remove center from predictions
+            pose = pose[:,1:,:]
+            
+            if len(pose) == 0:
+                self.pose = torch.zeros(17,3)
+            else:            
+                self.pose = torch.cat([*pose], dim=0) # concatenate multiple instances
+
+
         else:
-            pose = np.array(pose_output[0])
-            self.pose = pose[:, [1, 0, 2]]
+
+            # check if using TFGPUinference flag
+            # if not, get pose from network output
+
+            if len(pose_output) > 1:
+                scmap, locref = extract_cnn_output(pose_output, self.cfg)
+                num_outputs = self.cfg.get("num_outputs", 1)
+                if num_outputs > 1:
+                    self.pose = multi_pose_predict(
+                        scmap, locref, self.cfg["stride"], num_outputs
+                    )
+                else:
+                    self.pose = argmax_pose_predict(scmap, locref, self.cfg["stride"])
+            else:
+                pose = np.array(pose_output[0])
+                self.pose = pose[:, [1, 0, 2]]
 
         # display image if display=True before correcting pose for cropping/resizing
 
         if self.display is not None:
+
             self.display.display_frame(frame, self.pose)
 
         # if frame is cropped, convert pose coordinates to original frame coordinates

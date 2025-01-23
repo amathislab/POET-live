@@ -164,6 +164,7 @@ def benchmark(
     save_poses=False,
     save_video=False,
     output=None,
+    poet=False
 ) -> typing.Tuple[np.ndarray, tuple, bool, dict]:
     """ Analyze DeepLabCut-live exported model on a video:
     Calculate inference time,
@@ -291,6 +292,7 @@ def benchmark(
 
     live = DLCLive(
         model_path,
+        model_type = "POET" if poet else "base",
         tf_config=tf_config,
         resize=resize,
         cropping=cropping,
@@ -302,7 +304,10 @@ def benchmark(
     )
 
     poses.append(live.init_inference(frame))
-    TFGPUinference = True if len(live.outputs) == 1 else False
+    if poet:
+        TFGPUinference = True
+    else:
+        TFGPUinference = True if len(live.outputs) == 1 else False
 
     iterator = range(n_frames) if (print_rate) or (display) else tqdm(range(n_frames))
     for i in iterator:
@@ -394,7 +399,9 @@ def benchmark(
     ### close video and tensorflow session
 
     cap.release()
-    live.close()
+
+    if not poet:
+        live.close()
 
     if save_video:
         vwriter.release()
@@ -532,6 +539,7 @@ def benchmark_videos(
     cmap="bmy",
     save_poses=False,
     save_video=False,
+    poet=False
 ):
     """Analyze videos using DeepLabCut-live exported models.
     Analyze multiple videos and/or multiple options for the size of the video
@@ -642,6 +650,7 @@ def benchmark_videos(
                 save_poses=save_poses,
                 save_video=save_video,
                 output=output,
+                poet=poet
             )
 
             inf_times.append(this_inf_times)

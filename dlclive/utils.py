@@ -10,6 +10,11 @@ import numpy as np
 import warnings
 from dlclive.exceptions import DLCLiveWarning
 
+# POET
+import torch
+DEVICE = torch.device('cuda')
+
+
 try:
     import skimage
 
@@ -78,6 +83,21 @@ def resize_frame(frame, resize=None):
     else:
 
         return frame
+
+
+# rescaling POET's poset output to image dimensions
+def rescale_kpts(out_kpts, size):
+    img_w, img_h = size
+    b = out_kpts.clone()
+    out_kpts[:, 2::3] = (out_kpts[:, 2::3] - 0.5) * 2
+    out_kpts[:, 3::3] = (out_kpts[:, 3::3] - 0.5) * 2
+    img_w = torch.tensor([img_w], dtype=torch.float32).to(DEVICE)
+    img_h = torch.tensor([img_h], dtype=torch.float32).to(DEVICE)
+    b[:,0] = out_kpts[:,0] * img_w
+    b[:,1] = out_kpts[:,1] * img_h
+    b[:,2::3] = out_kpts[:,2::3] * img_w + b[:,0].unsqueeze(-1)
+    b[:,3::3] = out_kpts[:,3::3] * img_h + b[:,1].unsqueeze(-1)
+    return b
 
 
 def img_to_rgb(frame):

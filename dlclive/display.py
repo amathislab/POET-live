@@ -102,12 +102,14 @@ class Display(object):
                         draw.ellipse(
                             coords, fill=self.colors[i], outline=self.colors[i]
                         )
+
                     except Exception as e:
                         print(e)
 
         img_tk = ImageTk.PhotoImage(image=img, master=self.window)
         self.lab.configure(image=img_tk)
         self.window.update()
+
 
     def destroy(self):
         """
