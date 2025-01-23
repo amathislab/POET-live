@@ -35,6 +35,12 @@ To install POET-live and its dependencies, follow these steps:
   pip install scipy 
   ```
 
+### ⚙️ Setup
+
+To use POET-live, you'll need the pretrained POET checkpoint. Download the checkpoint from the following link: [POET Checkpoint](https://zenodo.org/records/7972042)
+
+Place the downloaded checkpoint in a directory of your choice load it in the GUI.
+
 Check out this [script](dlclive/poetlive/check_install.py) on how to use POET-live and if your installation is working!
 
 ---
